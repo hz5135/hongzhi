@@ -132,8 +132,6 @@ Client mode options:
                     Multi-Agent Throughput      5039
                          OVERALL COMPOSITE      6282
 
-            (Reference: AMD XXXX XXXX = 1000 | Higher is better)
-
 ===========================================================================
 ```
 
@@ -220,8 +218,6 @@ Client mode options:
                     Sandbox Count          256
               Average Agent Speed          6710
                      Metrics File          sandbox-2026-07-29-10.45.21.log
-
-            (Reference: AMD XXXX XXXX = 1000 | Higher is better)
             
 ===========================================================================
 ```
