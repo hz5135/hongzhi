@@ -3,7 +3,7 @@
 ## Scenario
 
 * business scenario: Real user operations and system characteristics‌ when AI agent servers run.
-* automic scenario: Common system micro-operations extracted from business scenarios.
+* atomic scenario: Common system micro-operations extracted from business scenarios.
 
 ## Work Mode
 
@@ -12,7 +12,6 @@
 
 ## Metrics
 
-* score: Total scores calculated accroding specified rules.
 * power: CPU and socket power.
 * sandbox denisity: Count of sandboxes run on a AI agent system.
 * throught: Tokens or responses generated from a AI agent system in specified duration.

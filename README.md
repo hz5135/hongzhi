@@ -2,37 +2,91 @@
 
 **AgentBench** is a benchmark tool to measure the performance of AI agent system.
 
+---
+
 ## Features
 
-- Simulate common micro-operations of AI agent system and score the performance.
 - Simulate common micro-operations of AI agent system and measure the power of hardware.
 - Simulate common micro-operations of multiple AI agents to evaluate the max parallelism.
 - Measure the performance of a self-defined AI agent system with rich and typical scenarios.
 
-## Install Guidence
+---
 
-### Linux
+## Quick Start
 
-// TODO
+### Prerequisites
 
-### macOS
+- C and C++ compiler (gcc/clang)
+- make
+- a static `libstdc++` (`libstdc++.a`) — the binary links with `-static-libstdc++` so it runs on hosts whose system libstdc++ is older than the compiler
 
-// TODO
+No other dependencies — LuaJIT 2.1 and libcurl 8.11.0 are vendored under `third_party/` and built from source.
 
-### Windows
+### Build
 
-// TODO
+```bash
+make agentbench   # the benchmark binary
+make test         # smoke test (builds agentbench first)
+```
 
-### Source Code
+`make agentbench` links LuaJIT with `-Wl,--export-dynamic`, which is what makes
+the C kernels resolvable from Lua via `ffi.C`.
 
-// TODO
+The binary is compiled for a **conservative portable ISA** by default
+(`armv8-a` on aarch64, `x86-64` on x86_64), so it also runs where the CPU does
+not expose every extension of the build host. Opt into the build host's own ISA
+with `make MARCH=native`.
+
+---
 
 ## Usage
 
-### Work Mode
+### List Benchmarks
 
-- Simulation Mode: Simulate the work progress of AI agent system with kinds of common micro-operations. Users can evaluate the performance of local software and hardware system roughly as to AI agent scenarios in this mode.
-- Client Mode: Simulate multiple clients to visit self-defined AI agent system which is a black-box. Users can evaluate the performance of the system with real scenarios.
+```bash
+./agentbench list simulation     # the benchmarks this build contains
+```
+
+### Run a Simulation Benchmark (CPU)
+
+Run `json_processing` with 4 threads:
+
+```bash
+./agentbench --mode=simulation -t 4 -b json_processing
+```
+
+### Run the Full Simulation Suite
+
+Run every benchmark in the build:
+
+```bash
+./agentbench --mode=simulation -t 4
+```
+
+Run a subset:
+
+```bash
+./agentbench --mode=simulation -t 4 -b json_processing,tree_search -i 5
+```
+
+Output as JSON:
+
+```bash
+./agentbench --mode=simulation -b json_processing -j
+```
+
+### Passing Options to a Benchmark
+
+```bash
+./agentbench --mode=simulation -t 4 -b tree_search
+```
+
+(`tree_search` has no tunable knobs: its workload constants — `total_sets` and
+the per-set sizes — are defined at the top of `lua/benchmarks/tree_search.lua`.)
+
+(`json_processing`, `text_processing`, `diff_patch`, and `html_parsing` are the
+same: their workload constants are defined at the top of the matching
+`lua/benchmarks/*.lua`.)
 
 ### Command
 
@@ -40,54 +94,81 @@
 [root@localhost ~]# agentbench --help
 Usage:
 agentbench --mode=simulation [options]
-agentbench --mode=client --host=$HOST --port=$PORT [options]
 
 Benchmark suit for AI agent workloads
 
 General options：
-  -m, --mode=MODE  run mode for CPU benchmark or Agent workload, simulation for CPU benchmark and client for Agent workload
+  -m, --mode=MODE  simulation for CPU benchmark of agent workloads
   --help  show this help message and exit
-  
+
 Simulation mode options:
   -b, --benchmarks=BENCHMARK_LIST  run only the named benchmark, separated by comma if mutiple (default: all simulation benchmarks)
   -i, --iterations=ITERATIONS  number of timed iterations per benchmark (default: 5)
   -t, --threads=THREADS  max threads for concurrent benchmarks (default: CPU count)
-  --power  measure the power of CPU and server
-  --bmc_ip=BMC_IP  the BMC IP for server, required if `--power` is set
-  --bmc_user=USER_NAME  username of admin account, required if `--power` is set
-  --bmc_password=PASSWORD  password of admin account, required if `--power` is set
-  -s, --sandbox  measure the parallelism of sandbox
-  --parallelism=SANDBOX_COUNT  sandbox count to be started, required if `--sandbox` is set
   -j, --json  output results as JSON
-  -v, --verbose  show detailed per-iteration results  
-  
-Client mode options:
-  -h, --host=HOST  Server host to be tested
-  -p, --port=PORT  Gateway service port
-  -b, --benchmarks=BENCHMARK_LIST  run only the named benchmark, separated by comma if mutiple (default: all scenario benchmarks)
-  -c, --clients=CLIENT_COUNT  clients number to be created (default: 32)
+  -v, --verbose  show detailed per-iteration results
 ```
+
+---
 
 ## Options
 
 | Option        | Type   | Abbreviation | Default Value | Required | Enum                                                                                                                                                                                                                                                                 | Description                                                                                                                                                                                                 | Remarks                                                               |
 | ------------- | ------ | ------------ | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| mode          | string | -m           | -             | Y        | • simulation: works in simulation mode, tests locally only.<br>• client: works in real scenario mode, both local and remote server test available.                                                                                                                   | Benchmark work mode. If it is simulation, specified or all simulated operations will be executed. If it is client，benchmark will act as clients to test self-defined AI agent performance run on remote servers. |                                                                       |
-| benchmarks    | string | -b           | all           | N        | Simulation Mode:<br>• context_switching<br>• json_processing<br>• text_processing<br>• tree_search<br>• concurrent_dispatch<br>• memory_pressure<br>• subprocess_spawning<br>• diff_patch<br>• html_parsing<br>• schema_validation<br>• streaming_parse<br>• code_edit_apply<br>• agentic_loop<br><br>Client Mode:<br>• web_service<br>• code_edit<br>• image_recognition<br>• data_query<br>• system_maintance<br>• report_analysis | Benchmark suite (or micro-operations) to be run.                                                                                                                                                           | All benchmark suits will be run under the specified mode by default.   |
+| mode          | string | -m           | -             | Y        | • simulation: works in simulation mode, tests locally only.                                                  | Benchmark work mode. The specified or all simulated operations will be executed.                                                             |                                                                       |
+| benchmarks    | string | -b           | all           | N        | Simulation Mode:<br>• context_switching<br>• json_processing<br>• text_processing<br>• tree_search<br>• concurrent_dispatch<br>• memory_pressure<br>• subprocess_spawning<br>• diff_patch<br>• html_parsing<br>• schema_validation<br>• streaming_parse<br>• code_edit_apply<br>• agentic_loop | Benchmark suite (or micro-operations) to be run.                                                                                                                                                           | All benchmark suits will be run under the specified mode by default.   |
 | iterations    | int    | -i           | 5             | N        | -                                                                                                                                                                                                                                                                    | Rounds to be run.                                                                                                                                                                                           | Only works under simulation mode.                                     |
 | threads       | int    | -t           | CPU_COUNT     | N        | -                                                                                                                                                                                                                                                                    | Concurrent thread count.                                                                                                                                                                                   | • Only works under simulation mode.<br>• CPU core count by default.    |
 | json          | -      | -j           | -             | N        | -                                                                                                                                                                                                                                                                    | Whether output is JSON format for the stdout.                                                                                                                                                              | • Only works under simulation mode.<br>• Output in human-readable format by default. |
 | verbose       | -      | -v           | -             | N        | -                                                                                                                                                                                                                                                                    | Whether output all the mid-process log.                                                                                                                                                                    | • Only works under simulation mode.<br>• Only output the statistical result by default. |
-| host          | string | -h           | -             | Y        | -                                                                                                                                                                                                                                                                    | Host IP of the agent server.                                                                                                                                                                               | Only works under client mode.                                          |
-| port          | int    | -p           | -             | Y        | -                                                                                                                                                                                                                                                                    | Server port of agent service.                                                                                                                                                                              | Only works under client mode.                                          |
-| clients       | int    | -c           | 32            | N        | -                                                                                                                                                                                                                                                                    | Client count to be simulated.                                                                                                                                                                              | Only works under client mode.                                          |
-| power         | -      | -            | -             | N        | -                                                                                                                                                                                                                                                                    | Whether measure the power of CPU and Server.                                                                                                                                                               | Only works under client mode.                                          |
-| bmc_ip        | string | -            | -             | N        | -                                                                                                                                                                                                                                                                    | BMC IP, required if --power is set.                                                                                                                                                                        | Only works under client mode.                                          |
-| bmc_user      | string | -            | -             | N        | -                                                                                                                                                                                                                                                                    | User name of BMC admin account，required if --power is set.                                                                                                                                                | Only works under client mode.                                          |
-| bmc_password  | string | -            | -             | N        | -                                                                                                                                                                                                                                                                    | Password of BMC admin account，required if --power is set.                                                                                                                                                 | Only works under client mode.                                          |
-| sandbox       | -      | -s           | -             | N        | -                                                                                                                                                                                                                                                                    | Whether testing the density of sandbox.                                                                                                                                                                    | Only works under client mode.                                          |
-| parallelism   | int    | -            | -             | N        | -                                                                                                                                                                                                                                                                    | Sandbox count to be started.                                                                                                                                                                               | Only works under client mode.                                          |
 | help          | string | -            | -             | N        | -                                                                                                                                                                                                                                                                    | Output the usage and description of all options.                                                                                                                                                           |                                                                       |
+
+---
+
+## Benchmarks
+
+### Simulation Mode — 13 Atomic Scenarios
+
+The design defines thirteen atomic scenarios (see
+[`docs/designs/simulation_mode.md`](docs/designs/simulation_mode.md)). Each is
+a **C kernel** (`src/benchmarks/*.c`) compiled into the binary and wrapped by a
+Lua script (`lua/benchmarks/*.lua`) whose `event()` callback calls the kernel via
+`ffi.C`. This series implements five of them; the Scope column says which.
+
+| Benchmark | Description | Scope |
+|-----------|-------------|-------|
+| `context_switching` | Rapid coroutine/thread switching (agent think→tool→think loop) | later |
+| `json_processing` | JSON serialization + deserialization of tool schemas, conversations, function-call round trips | this series |
+| `text_processing` | Chunking + content hashing, regex-like extraction, line-by-line log parsing | this series |
+| `tree_search` | MCTS + beam search (agent planning/reasoning) | this series |
+| `diff_patch` | Line-by-line diff, unified diff generation, patch application | this series |
+| `html_parsing` | DOM tree construction, CSS-like queries, HTML-to-markdown | this series |
+| `schema_validation` | JSON Schema validation + malformed JSON repair | later |
+| `streaming_parse` | SSE stream parsing with fragmented tool-call JSON accumulation | later |
+| `code_edit_apply` | String search, uniqueness verification, replacement | later |
+| `agentic_loop` | Full Glob → Grep → Read → Edit → Verify cycle with growing conversation state | later |
+| `memory_pressure` | Context-window management: sliding-window attention, KV-cache insert/lookup, history compaction, burst alloc/dealloc | later |
+| `concurrent_dispatch` | Parallel tool dispatch + shared-state aggregation (web search / file read / API call) | later |
+| `subprocess_spawning` | Process fork/exec, pipe management, and output collection | later |
+
+#### Single Agent vs Multiple Agents
+
+The scenario set is selected from the thread count (an explicit `-b` list always
+runs exactly what was requested):
+
+- **Single agent** (`-t 1`) — the scenarios that model one agent, in a single
+  thread.
+- **Multiple agents** (`-t N`, N ≥ 2) — the scenarios that model several agents
+  running concurrently, spread across N threads. The thread count defaults to
+  the total number of CPU cores.
+
+When `-t 1` the selection skips `context_switching`, `concurrent_dispatch` and
+`subprocess_spawning` — the three scenarios that only mean something with several
+agents. None of the five scenarios implemented here is one of them, so today
+`-t 1` and `-t N` run the same set; the mechanism is in place for the planned
+ones.
+
+---
 
 ## Output
 
@@ -97,7 +178,7 @@ Client mode options:
 [root@localhost ~]# agentbench --mode=simulation
 
 ===========================================================================
-  AgentBench v1.0.0
+  AgentBench v0.1
   Benchmark suit for AI agent workloads
 ===========================================================================
 
@@ -107,131 +188,139 @@ Client mode options:
   Cores:       256
   Platform:    Linux-5.10.211.v10+-aarch64-with-glibc2.28
   Arch:        aarch64
-  Time：       2026-07-27 10:45:21
+  Time:        2026-07-27 10:45:21
 
 ===========================================================================
-  Benchmark                 Time (s)   StdDev      CV        Ops    Score
----------------------------------------------------------------------------
 
-  context_switching            0.153    0.029  21.2%     30,000    13047
-  json_processing              0.051    0.000   0.1%      4,300    29235
-  text_processing              0.154    0.000   0.2%    130,743    16261
-  tree_search                  3.830    0.004   0.1%  4,653,944      783
-  concurrent_dispatch          0.109    0.002   2.0%      4,000    18301
-  memory_pressure              2.586    0.008   0.3%    265,182     1547
-  subprocess_spawning          5.670    0.273   4.9%     25,590      882
-  diff_patch                   0.312    0.005   1.5%     17,727     6404
-  html_parsing                 0.438    0.002   0.5%     52,368     3424
-  schema_validation            0.566    0.008   1.3%     12,710     3534
-  streaming_parse              0.287    0.000   0.1%     71,578     5228
-  code_edit_apply              0.145    0.000   0.1%      4,774    13802
-  agentic_loop                 0.249    0.002   0.8%    317,047    12069
----------------------------------------------------------------------------
 
-                        Single-Agent Speed      6710
-                    Multi-Agent Throughput      5039
-                         OVERALL COMPOSITE      6282
-
-===========================================================================
+  Benchmark               elapsed (sec)                ops
+  ------------------------------------------------------------
+  agentic_loop                   0.2490             317047
+  json_processing                0.0510               4300
+  subprocess_spawning            5.6700              25590
+  text_processing                0.1540             130743
+  tree_search                    3.8300            4653944
+  context_switching              0.1530              30000
+  concurrent_dispatch            0.1090               4000
+  diff_patch                     0.3120              17727
+  streaming_parse                0.2870              71578
+  code_edit_apply                0.1450               4774
+  html_parsing                   0.4380              52368
+  schema_validation              0.5660              12710
+  memory_pressure                2.5860             265182
+  ------------------------------------------------------------
+  Total elapsed                 14.5500
+  Thread count:          256
 ```
 
-### Client Mode
+Per benchmark the suite prints the wall-clock **elapsed** time and the number of
+**ops** executed (JSON output adds an `"ops"` field per result). With `-i N` the
+suite repeats N times and **elapsed is the accumulated total across all N
+iterations** (ops stay the per-event count), so e.g. `-i 1000` shows the total
+runtime of the 1000 runs.
 
-```Bash
-[root@localhost ~]# agentbench --mode=client --host=$HOST --port=$PORT
-========================================================================================================================
+---
 
-  AgentBench v1.0.0
-  Benchmark suit for AI agent workloads
-========================================================================================================================
+## Weights
 
-  CPU:         HJMicro(R) Hongmin(R) 9198 Processor
-  Socket:      2
-  NUMA:        2
-  Cores:       256
-  Platform:    Linux-5.10.211.v10+-aarch64-with-glibc2.28
-  Arch:        aarch64
-  Time：       2026-07-27 10:45:21
+The weight of each scenario is its observed frequency under business scenarios
+(as documented in `docs/designs/simulation_mode.md`).
 
-========================================================================================================================
-  Benchmark            P99(s)    throughout(10s)    throughout(20s)    throught(50s)    throught(100s)    throught(200s)
----------------------------------------------------------------------------------------------------------------------
+| Benchmark | Weight |
+|-----------|--------|
+| Agentic Loop | 13% |
+| JSON Processing | 10% |
+| Subprocess Spawning | 9% |
+| Text Processing | 8% |
+| Tree Search | 8% |
+| Context Switching | 7% |
+| Concurrent Dispatch | 7% |
+| Diff/Patch | 7% |
+| Streaming Parse | 7% |
+| Code Edit Apply | 7% |
+| HTML Parsing | 6% |
+| Schema Validation | 6% |
+| Memory Pressure | 5% |
 
-  web_service          1.28        5                  19                48                79                132
-  code_edit            38          -                  -                 -                 -                 -
-  image_recognition    0.24        24                 78                156               287               401
-  data_query           1.02        201                398               766               1089              2300
-  system_maintance     32.80       -                  -                 -                 -                 -
-  report_analysis      39.81       12                 27                50                112               238
-========================================================================================================================
+---
+
+## CLI Reference
+
+```
+Usage:
+  agentbench --mode=simulation [options]
+  agentbench list simulation
+  agentbench --version
+
+General options:
+      --version          show version and exit
+
+Simulation mode options:
+  -b, --benchmarks=LIST  run only the named benchmarks (default: all)
+  -i, --iterations=N     suite iterations (default: 5); the reported elapsed is the
+                         accumulated total across the N iterations
+  -t, --threads=N        max threads for concurrent benchmarks (default: CPU count)
+  -j, --json             output results as JSON
+  -v, --verbose          show detailed per-iteration results
+
+Benchmark tuning: any unrecognized `--key=value` argument
+is passed through to the Lua scripts as `agentbench.opt.<key>`, overriding the
+script defaults declared in `agentbench.cmdline.options`. The benchmarks
+implemented here have no tunable knobs: their workload constants — `total_sets`
+and the per-set sizes — are defined at the top of `lua/benchmarks/*.lua`. Edit
+them there, no recompile needed; keep `total_sets` >= your core count so `-t` is
+not capped. Keys that collide with a suite-level option (`iterations` = `-i`,
+`threads` = `-t`) are consumed by getopt first, so rename the Lua-side option if
+you need to override those. Numeric values are auto-converted; everything else
+passes as a string.
 ```
 
-### Power Measurement (optional)
+---
 
-```Bash
-[root@localhost ~]# agentbench --mode=simulation --power --bmc_ip=$BMC_IP --bmc_user=$BMC_USER --bmc_password=$BMC_PASSWORD
-===========================================================================
+## Architecture
 
-  AgentBench v1.0.0
-  Benchmark suit for AI agent workloads
-===========================================================================
-
-  CPU:         HJMicro(R) Hongmin(R) 9198 Processor
-  Socket:      2
-  NUMA:        2
-  Cores:       256
-  Platform:    Linux-5.10.211.v10+-aarch64-with-glibc2.28
-  Arch:        aarch64
-  Time：       2026-07-27 10:45:21
-
-===========================================================================
-
-                       CPU Max Power    280 Watts
-                       CPU Min Power    280 Watts
-                       Total Max Power  693 Watts
-                       Total Min Power  682 Watts
-                       Metrics File     power-2026-07-29-10.45.21.log
-                       
-===========================================================================
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    agentbench (C binary)                        │
+│                   embeds LuaJIT (libluajit)                     │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Runner (src/run.cpp)                                    │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │  │
+│  │  │ Worker 0    │  │ Worker 1    │  │ Worker N    │       │  │
+│  │  │ LuaJIT state│  │ LuaJIT state│  │ LuaJIT state│       │  │
+│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘       │  │
+│  │         │   thread_run   │                │               │  │
+│  │         └──────┬─────────┴────────────────┘               │  │
+│  │                │  ffi.C                                   │  │
+│  │  ┌─────────────▼──────────────────────────────────────┐   │  │
+│  │  │  C Kernels (src/benchmarks/*.c)                    │   │  │
+│  │  │  run_tree_search, run_json_processing, ...                │  │  │
+│  │  └────────────────────────────────────────────────────┘   │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                │
+│  Lua scripts (lua/benchmarks/*.lua) define event() callbacks   │
+│  that call the C kernels.                                      │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-### Sandbox Density (optional)
-
-```Bash
-[root@localhost ~]# agentbench --mode=simulation --sandbox --parallelism=256
-===========================================================================
-
-  AgentBench v1.0.0
-  Benchmark suit for AI agent workloads
-===========================================================================
-
-  CPU:         HJMicro(R) Hongmin(R) 9198 Processor
-  Socket:      2
-  NUMA:        2
-  Cores:       256
-  Platform:    Linux-5.10.211.v10+-aarch64-with-glibc2.28
-  Arch:        aarch64
-  Time：       2026-07-27 10:45:21
-
-===========================================================================
-
-                    Sandbox Count          256
-              Average Agent Speed          6710
-                     Metrics File          sandbox-2026-07-29-10.45.21.log
-            
-===========================================================================
-```
-
-## Reference
-
-- [AgentiCPUMark](https://github.com/apellegr/AgentiCPUMark): AgentiCPUMark is a CPU-oriented benchmark tool to measure the performance of AI agent operations. Although it is not designed for real AI agent systems, we consider it as an excellent case to evalute the performance of local environment roughly.
-- [Sysbench](https://github.com/akopytov/sysbench): Sysbench is a famous benchmark tool in database filed around the world. It supports TPC-C standard and simulates specifled count of clients to access self-defined database system.
-- [TPC-C](https://www.tpc.org/tpcc/): TPC-C is the most widely used online transaction processing benchmark. During designing the benchmark metrics, we referenced its principle a lot.  
-- [TPC-H](https://www.tpc.org/tpch/): TPC-H is another famous benchmark which is often used to measure the performance of complex query systems such as big data workloads. It consists of 22 different kinds of queries to cover most typical scenarios.
+---
 
 ## Contributing
 
-Contributions are warmly welcomed! Please open an issue to describe your ideas before submitting a PR.
+Contributions are welcome! Please open an issue to discuss your ideas before submitting a PR.
+
+---
+
+## References
+
+- [Sysbench](https://github.com/akopytov/sysbench) — Database benchmark tool (LuaJIT + C plugin architecture)
+- [LuaJIT](https://luajit.org/) — Just-in-time compiler for Lua 5.1
+- [AgentiCPUMark](https://github.com/apellegr/AgentiCPUMark): AgentiCPUMark is a CPU-oriented benchmark tool to measure the performance of AI agent operations. Although it is not designed for real AI agent systems, we consider it as an excellent case to evalute the performance of local environment roughly.
+- [TPC-C](https://www.tpc.org/tpcc/): TPC-C is the most widely used online transaction processing benchmark. During designing the benchmark metrics, we referenced its principle a lot.  
+- [TPC-H](https://www.tpc.org/tpch/): TPC-H is another famous benchmark which is often used to measure the performance of complex query systems such as big data workloads. It consists of 22 different kinds of queries to cover most typical scenarios.
+
+---
 
 ## License
 
