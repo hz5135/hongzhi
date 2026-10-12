@@ -1,0 +1,59 @@
+# Build artifacts
+build/
+agentbench
+
+# sandbox build artifacts (built by `make sbx` / `make agent`, see Makefile clean)
+/sbx
+/sbx-agent
+sandbox/build/
+sandbox/bin/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Test
+.pytest_cache/
+.coverage
+
+# Vendored third-party build artifacts (source is committed, outputs are not)
+# LuaJIT: only the dynasm-generated files are build outputs; the vendored
+# source tree (src/*.h, dynasm/, etc.) is committed.
+third_party/luajit/src/luajit
+third_party/luajit/src/libluajit.a
+third_party/luajit/src/*.o
+third_party/luajit/src/host/*.o
+third_party/luajit/src/host/buildvm
+third_party/luajit/src/host/minilua
+third_party/luajit/src/jit/vmdef.lua
+third_party/luajit/src/lj_vm.S
+third_party/concurrency_kit/build/
+
+# Vendored curl build artifacts (source is committed, outputs are not)
+# configure-generated Makefiles and state are NOT committed so each checkout
+# re-runs ./configure with its own toolchain (avoids stale AR/CC paths).
+third_party/curl-8.11.0/**/Makefile
+third_party/curl-8.11.0/Makefile
+third_party/curl-8.11.0/libtool
+third_party/curl-8.11.0/config.log
+third_party/curl-8.11.0/config.status
+third_party/curl-8.11.0/lib/curl_config.h
+third_party/curl-8.11.0/buildinfo.txt
+third_party/curl-8.11.0/curl-config
+third_party/curl-8.11.0/**/stamp-h1
+third_party/curl-8.11.0/lib/libcurl.vers
+third_party/curl-8.11.0/lib/.deps/
+third_party/curl-8.11.0/lib/.libs/
+third_party/curl-8.11.0/lib/*.o
+third_party/curl-8.11.0/lib/*.lo
+third_party/curl-8.11.0/lib/*.la
+third_party/curl-8.11.0/**/.deps/
+third_party/curl-8.11.0/**/.dirstamp
+third_party/curl-8.11.0/**/*.Po
+third_party/curl-8.11.0/**/*.o
+third_party/curl-8.11.0/**/*.lo
+third_party/curl-8.11.0/**/*.la
+
+# Environment
+.env
+

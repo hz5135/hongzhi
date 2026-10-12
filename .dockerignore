@@ -1,0 +1,8 @@
+.git
+# Host build artifacts stay out of the context, except the three the runtime
+# stage copies in (see docker/Dockerfile): the benchmark binary and the two
+# minimal child helpers it spawns.  `build/*` rather than `build/` so the
+# exceptions below can re-include files (a file under an excluded parent
+# directory cannot be re-included).  Object files stay excluded via *.o.
+build/*
+*.o
