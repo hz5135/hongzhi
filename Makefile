@@ -54,7 +54,7 @@ CURL_VERSION := 8.11.0
 CURL_DIR     := third_party/curl-$(CURL_VERSION)
 CURL_LIB     := $(CURL_DIR)/lib/.libs/libcurl.a
 
-CPPFLAGS += -Isrc $(LUAJIT_CPPFLAGS) -I$(CURL_DIR)/include
+CPPFLAGS += -Isrc -Isrc/benchmarks/include -Isrc/benchmarks/common $(LUAJIT_CPPFLAGS) -I$(CURL_DIR)/include
 CXXFLAGS += -I/usr/include/
 LDLIBS   += -lm -lpthread -ldl
 
@@ -70,11 +70,29 @@ FRAMEWORK_SRCS := \
 
 FRAMEWORK_OBJS := $(FRAMEWORK_SRCS:src/%.cpp=$(BUILD_DIR)/%.o)
 
+# --- Benchmark kernel sources (C, extern "C") ---
+# One entry per benchmark kernel; added by the PR that introduces the kernel.
+BENCH_SRCS :=
+
+# --- Helpers the kernels share (src/benchmarks/common/, header beside each implementation) ---
+# workers is the thread fan-out every kernel uses; the rest are pulled in by the
+# kernel that needs them.
+BENCH_SRCS += \
+	src/benchmarks/common/hash.c \
+	src/benchmarks/common/json_dom.c \
+	src/benchmarks/common/json_escape.c \
+	src/benchmarks/common/strbuf.c \
+	src/benchmarks/common/strlist.c \
+	src/benchmarks/common/text.c \
+	src/benchmarks/common/workers.c
+
+BENCH_OBJS := $(BENCH_SRCS:src/%.c=$(BUILD_DIR)/%.o)
+
 # Header dependencies (from -MMD): the pattern rules below list only the
-# .c/.cpp file, so without this a change to a shared header would leave stale
-# objects that silently disagree with the sources. `make clean` removes them
-# together with $(BUILD_DIR).
-DEPS := $(FRAMEWORK_OBJS:.o=.d)
+# .c/.cpp file, so without this a change to a shared header (core.h /
+# pyrand.h) would leave stale objects that silently disagree with the
+# sources. `make clean` removes them together with $(BUILD_DIR).
+DEPS := $(FRAMEWORK_OBJS:.o=.d) $(BENCH_OBJS:.o=.d)
 -include $(DEPS)
 
 # --- Default goal: build the binary ---
@@ -146,14 +164,12 @@ $(BUILD_DIR)/%.o: src/%.cpp $(TOOLCHAIN_STAMP)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # --- Compile benchmark kernels (C) ---
-# The kernel sources are added to the build by the benchmark PRs, one file per
-# benchmark, together with the shared helpers under src/benchmarks/common/.
 $(BUILD_DIR)/%.o: src/%.c $(TOOLCHAIN_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-agentbench: envcheck-static $(FRAMEWORK_OBJS) $(LUAJIT_LIB_DEP) $(CURL_LIB)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(FRAMEWORK_OBJS) $(LUAJIT_LINK) $(CURL_LIB) $(LDLIBS)
+agentbench: envcheck-static $(FRAMEWORK_OBJS) $(BENCH_OBJS) $(LUAJIT_LIB_DEP) $(CURL_LIB)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(FRAMEWORK_OBJS) $(BENCH_OBJS) $(LUAJIT_LINK) $(CURL_LIB) $(LDLIBS)
 
 # --- Smoke test ---
 test: agentbench
