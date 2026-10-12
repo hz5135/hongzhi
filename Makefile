@@ -73,7 +73,8 @@ FRAMEWORK_OBJS := $(FRAMEWORK_SRCS:src/%.cpp=$(BUILD_DIR)/%.o)
 # --- Benchmark kernel sources (C, extern "C") ---
 # One entry per benchmark kernel; added by the PR that introduces the kernel.
 BENCH_SRCS := \
-	src/benchmarks/json_processing.c
+	src/benchmarks/json_processing.c \
+	src/benchmarks/text_processing.c
 
 # --- Helpers the kernels share (src/benchmarks/common/, header beside each implementation) ---
 # workers is the thread fan-out every kernel uses; the rest are pulled in by the

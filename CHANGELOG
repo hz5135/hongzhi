@@ -4,3 +4,5 @@
 
 - The first benchmark is `json_processing` — JSON serialization and
   deserialization of tool schemas, conversations, and function-call round trips.
+- The second benchmark is `text_processing` — chunking with content hashing,
+  regex-like extraction, and line-by-line log parsing.

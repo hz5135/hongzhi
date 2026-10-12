@@ -13,6 +13,7 @@
  * yet, because no score is computed. */
 const bench_weight_t ALL_WEIGHTS[] = {
     {"json_processing",    0.10, "JSON serialization + deserialization"},
+    {"text_processing",    0.08, "Chunking, regex-like extraction, log parsing"},
 };
 const int NUM_BENCHMARKS = sizeof(ALL_WEIGHTS) / sizeof(ALL_WEIGHTS[0]);
 
