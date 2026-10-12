@@ -11,7 +11,9 @@
  * that introduces the kernel. The weight is the scenario's observed frequency
  * under business scenarios (docs/designs/simulation mode.md); nothing reads it
  * yet, because no score is computed. */
-const bench_weight_t ALL_WEIGHTS[] = {};
+const bench_weight_t ALL_WEIGHTS[] = {
+    {"json_processing",    0.10, "JSON serialization + deserialization"},
+};
 const int NUM_BENCHMARKS = sizeof(ALL_WEIGHTS) / sizeof(ALL_WEIGHTS[0]);
 
 /* The three multi-agent (concurrent) scenarios. A single-agent run (-t 1)

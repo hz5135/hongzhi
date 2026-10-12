@@ -1,0 +1,6 @@
+# Changelog
+
+## 2026-10-12 — the suite is built up from scratch, one step at a time
+
+- The first benchmark is `json_processing` — JSON serialization and
+  deserialization of tool schemas, conversations, and function-call round trips.

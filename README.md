@@ -178,7 +178,7 @@ ones.
 [root@localhost ~]# agentbench --mode=simulation
 
 ===========================================================================
-  AgentBench v0.1
+  AgentBench v0.2
   Benchmark suit for AI agent workloads
 ===========================================================================
 

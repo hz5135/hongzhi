@@ -20,7 +20,7 @@
 #define MAX_LUA_OPTS 64
 
 /* Version */
-#define AGENTBENCH_VERSION "v0.3.0"
+#define AGENTBENCH_VERSION "v0.2"
 
 typedef struct {
     /* General */
