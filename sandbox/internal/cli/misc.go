@@ -7,6 +7,21 @@ import (
 	"agentbench/sandbox/internal/sbx"
 )
 
+func cmdHealth(args []string) int {
+	ep := &agentEndpoint{port: 9119}
+	if !resolveAgent(args, 1, ep) {
+		return 1
+	}
+	r := clientFor(ep)
+	status, body := r.Health()
+	if status != 200 {
+		fmt.Fprintf(os.Stderr, "agent health failed: %d %s\n", status, body)
+		return 1
+	}
+	fmt.Println(body)
+	return 0
+}
+
 func cmdList() int {
 	infos := sbx.List()
 	if len(infos) == 0 {
