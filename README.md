@@ -25,17 +25,27 @@ No other dependencies — LuaJIT 2.1 and libcurl 8.11.0 are vendored under `thir
 ### Build
 
 ```bash
-make agentbench   # the benchmark binary
+make              # everything below
+make agentbench   # the benchmark binary only
+make sbx          # sbx CLI only (sandbox/bin/sbx, copied to .)
+make agent        # sbx-agent only (sandbox/bin/sbx-agent, copied to .)
+make image        # docker build -t agentbench:latest -f docker/Dockerfile .
+make rootfs       # guest rootfs template the microVM backends boot
 make test         # smoke test (builds agentbench first)
 ```
 
-`make agentbench` links LuaJIT with `-Wl,--export-dynamic`, which is what makes
-the C kernels resolvable from Lua via `ffi.C`.
+`make agentbench` needs only a C/C++ compiler and make — no Docker, no Go, no
+sandbox toolchain. It links LuaJIT with `-Wl,--export-dynamic`, which is what
+makes the C kernels resolvable from Lua via `ffi.C`. `make` (the default goal)
+additionally builds the sandbox CLI and the guest agent, and requires Docker for
+the image and rootfs steps.
 
 The binary is compiled for a **conservative portable ISA** by default
 (`armv8-a` on aarch64, `x86-64` on x86_64), so it also runs where the CPU does
-not expose every extension of the build host. Opt into the build host's own ISA
-with `make MARCH=native`.
+not expose every extension of the build host. `make image` ships that same
+host-built binary into the image, which is what makes a sandboxed run a
+comparison of environments rather than of two builds. Opt into the build host's
+own ISA with `make MARCH=native` for runs that never enter a guest.
 
 ---
 
@@ -107,21 +117,37 @@ Simulation mode options:
   -t, --threads=THREADS  max threads for concurrent benchmarks (default: CPU count)
   -j, --json  output results as JSON
   -v, --verbose  show detailed per-iteration results
+  -s, --sandbox  run the benchmark inside a sandbox (default backend: firecracker)
+  -B, --sandbox-backend=BACKEND  sandbox backend (default: firecracker; this build ships firecracker and docker)
+  -n, --sandboxes=SANDBOX_COUNT  number of sandboxes to run in parallel (default: 1)
+  --kernel=KERNEL  kernel for the microVM backends (default per family/arch: bzImage on x86_64, Image on aarch64)
+  --mems=MiB  sandbox memory in MiB (default: 4096)
+  --cpus=N  sandbox vCPUs (default: follows --threads, then 2)
+  --cpuset-cpus=LIST  pin the sandbox to a host CPU set (e.g. 0-127)
+  --cpuset-mems=LIST  pin the sandbox to NUMA memory nodes (e.g. 0)
 ```
 
 ---
 
 ## Options
 
-| Option        | Type   | Abbreviation | Default Value | Required | Enum                                                                                                                                                                                                                                                                 | Description                                                                                                                                                                                                 | Remarks                                                               |
-| ------------- | ------ | ------------ | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| mode          | string | -m           | -             | Y        | • simulation: works in simulation mode, tests locally only.                                                  | Benchmark work mode. The specified or all simulated operations will be executed.                                                             |                                                                       |
-| benchmarks    | string | -b           | all           | N        | Simulation Mode:<br>• context_switching<br>• json_processing<br>• text_processing<br>• tree_search<br>• concurrent_dispatch<br>• memory_pressure<br>• subprocess_spawning<br>• diff_patch<br>• html_parsing<br>• schema_validation<br>• streaming_parse<br>• code_edit_apply<br>• agentic_loop | Benchmark suite (or micro-operations) to be run.                                                                                                                                                           | All benchmark suits will be run under the specified mode by default.   |
-| iterations    | int    | -i           | 5             | N        | -                                                                                                                                                                                                                                                                    | Rounds to be run.                                                                                                                                                                                           | Only works under simulation mode.                                     |
-| threads       | int    | -t           | CPU_COUNT     | N        | -                                                                                                                                                                                                                                                                    | Concurrent thread count.                                                                                                                                                                                   | • Only works under simulation mode.<br>• CPU core count by default.    |
-| json          | -      | -j           | -             | N        | -                                                                                                                                                                                                                                                                    | Whether output is JSON format for the stdout.                                                                                                                                                              | • Only works under simulation mode.<br>• Output in human-readable format by default. |
-| verbose       | -      | -v           | -             | N        | -                                                                                                                                                                                                                                                                    | Whether output all the mid-process log.                                                                                                                                                                    | • Only works under simulation mode.<br>• Only output the statistical result by default. |
-| help          | string | -            | -             | N        | -                                                                                                                                                                                                                                                                    | Output the usage and description of all options.                                                                                                                                                           |                                                                       |
+| Option          | Type   | Abbreviation | Default Value | Required | Enum                                                                                                                                                                                                                                                                                           | Description                                                                      | Remarks                                                                                 |
+| --------------- | ------ | ------------ | ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| mode            | string | -m           | -             | Y        | • simulation: works in simulation mode, tests locally only.                                                                                                                                                                                                                                    | Benchmark work mode. The specified or all simulated operations will be executed. |                                                                                         |
+| benchmarks      | string | -b           | all           | N        | Simulation Mode:<br>• context_switching<br>• json_processing<br>• text_processing<br>• tree_search<br>• concurrent_dispatch<br>• memory_pressure<br>• subprocess_spawning<br>• diff_patch<br>• html_parsing<br>• schema_validation<br>• streaming_parse<br>• code_edit_apply<br>• agentic_loop | Benchmark suite (or micro-operations) to be run.                                 | All benchmark suits will be run under the specified mode by default.                    |
+| iterations      | int    | -i           | 5             | N        | -                                                                                                                                                                                                                                                                                              | Rounds to be run.                                                                | Only works under simulation mode.                                                       |
+| threads         | int    | -t           | CPU_COUNT     | N        | -                                                                                                                                                                                                                                                                                              | Concurrent thread count.                                                         | • Only works under simulation mode.<br>• CPU core count by default.                     |
+| json            | -      | -j           | -             | N        | -                                                                                                                                                                                                                                                                                              | Whether output is JSON format for the stdout.                                    | • Only works under simulation mode.<br>• Output in human-readable format by default.    |
+| verbose         | -      | -v           | -             | N        | -                                                                                                                                                                                                                                                                                              | Whether output all the mid-process log.                                          | • Only works under simulation mode.<br>• Only output the statistical result by default. |
+| help            | string | -            | -             | N        | -                                                                                                                                                                                                                                                                                              | Output the usage and description of all options.                                 |                                                                                         |
+| sandbox         | -      | -s           | -             | N        | -                                                                                                                                                                                                                                                                                              | Whether run the benchmark inside a sandbox.                                      | Only works under simulation mode.                                                       |
+| sandbox-backend | string | -B           | firecracker   | N        | • firecracker<br>• docker                                                                                                                                                                                                                                                                      | Sandbox backend to run the sandbox in.                                           | Only works with --sandbox.                                                              |
+| sandboxes       | int    | -n           | 1             | N        | -                                                                                                                                                                                                                                                                                              | Number of sandboxes to run in parallel.                                          | Only works with --sandbox.                                                              |
+| kernel          | string | -            | -             | N        | -                                                                                                                                                                                                                                                                                              | Kernel for the microVM backends.                                                 | Only works with --sandbox.                                                              |
+| mems            | int    | -            | 4096          | N        | -                                                                                                                                                                                                                                                                                              | Sandbox memory in MiB.                                                           | Only works with --sandbox.                                                              |
+| cpus            | int    | -            | -             | N        | -                                                                                                                                                                                                                                                                                              | Sandbox vCPU count.                                                              | Only works with --sandbox.                                                              |
+| cpuset-cpus     | string | -            | -             | N        | -                                                                                                                                                                                                                                                                                              | Host CPU set to pin the sandbox to.                                              | Only works with --sandbox.                                                              |
+| cpuset-mems     | string | -            | -             | N        | -                                                                                                                                                                                                                                                                                              | NUMA memory nodes to pin the sandbox to.                                         | Only works with --sandbox.                                                              |
 
 ---
 
@@ -133,16 +159,17 @@ The design defines thirteen atomic scenarios (see
 [`docs/designs/simulation_mode.md`](docs/designs/simulation_mode.md)). Each is
 a **C kernel** (`src/benchmarks/*.c`) compiled into the binary and wrapped by a
 Lua script (`lua/benchmarks/*.lua`) whose `event()` callback calls the kernel via
-`ffi.C`. This series implements five of them; the Scope column says which.
+`ffi.C`. Two are implemented today — `json_processing` and `text_processing`; the
+Scope column says which.
 
 | Benchmark | Description | Scope |
 |-----------|-------------|-------|
 | `context_switching` | Rapid coroutine/thread switching (agent think→tool→think loop) | later |
 | `json_processing` | JSON serialization + deserialization of tool schemas, conversations, function-call round trips | this series |
 | `text_processing` | Chunking + content hashing, regex-like extraction, line-by-line log parsing | this series |
-| `tree_search` | MCTS + beam search (agent planning/reasoning) | this series |
-| `diff_patch` | Line-by-line diff, unified diff generation, patch application | this series |
-| `html_parsing` | DOM tree construction, CSS-like queries, HTML-to-markdown | this series |
+| `tree_search` | MCTS + beam search (agent planning/reasoning) | later |
+| `diff_patch` | Line-by-line diff, unified diff generation, patch application | later |
+| `html_parsing` | DOM tree construction, CSS-like queries, HTML-to-markdown | later |
 | `schema_validation` | JSON Schema validation + malformed JSON repair | later |
 | `streaming_parse` | SSE stream parsing with fragmented tool-call JSON accumulation | later |
 | `code_edit_apply` | String search, uniqueness verification, replacement | later |
@@ -150,6 +177,9 @@ Lua script (`lua/benchmarks/*.lua`) whose `event()` callback calls the kernel vi
 | `memory_pressure` | Context-window management: sliding-window attention, KV-cache insert/lookup, history compaction, burst alloc/dealloc | later |
 | `concurrent_dispatch` | Parallel tool dispatch + shared-state aggregation (web search / file read / API call) | later |
 | `subprocess_spawning` | Process fork/exec, pipe management, and output collection | later |
+
+Three more of the thirteen follow the sandbox layer (`tree_search`,
+`diff_patch`, `html_parsing`); the remaining eight are not part of this work.
 
 #### Single Agent vs Multiple Agents
 
@@ -164,7 +194,7 @@ runs exactly what was requested):
 
 When `-t 1` the selection skips `context_switching`, `concurrent_dispatch` and
 `subprocess_spawning` — the three scenarios that only mean something with several
-agents. None of the five scenarios implemented here is one of them, so today
+agents. None of the two scenarios implemented here is one of them, so today
 `-t 1` and `-t N` run the same set; the mechanism is in place for the planned
 ones.
 
@@ -262,6 +292,23 @@ Simulation mode options:
   -t, --threads=N        max threads for concurrent benchmarks (default: CPU count)
   -j, --json             output results as JSON
   -v, --verbose          show detailed per-iteration results
+  -s, --sandbox          run the benchmark inside a sandbox (default backend: firecracker)
+  -B, --sandbox-backend  sandbox backend (default: firecracker; this build ships
+                         firecracker and docker — see sandbox/README.md)
+  -n, --sandboxes=N      number of sandboxes to run in parallel (default: 1)
+      --kernel=K         kernel for the microVM backends: kernels/<microvm>/<K>
+                         (default per family/arch: bzImage on x86_64, Image on
+                         aarch64; absolute path or SBX_KERNEL overrides)
+      --mems=N           sandbox memory in MiB (default 4096; SBX_MEMORY_MB
+                         overrides; applied as Docker --memory or the
+                         Firecracker cgroup memory.max)
+      --cpus=N           sandbox vCPUs (default: follows -t/--threads, then
+                         SBX_CPUS, then 2; explicit override for sandbox size,
+                         does not change the in-guest thread count)
+      --cpuset-cpus=LIST pin the sandbox to host CPUs (e.g. 0-127; also
+                         --cpuset.cpus / --cpuset_cpus / SBX_CPUSET_CPUS)
+      --cpuset-mems=LIST pin the sandbox to NUMA memory nodes (e.g. 0; also
+                         --cpuset.mems / --cpuset_mems / SBX_CPUSET_MEMS)
 
 Benchmark tuning: any unrecognized `--key=value` argument
 is passed through to the Lua scripts as `agentbench.opt.<key>`, overriding the
@@ -295,7 +342,7 @@ passes as a string.
 │  │                │  ffi.C                                   │  │
 │  │  ┌─────────────▼──────────────────────────────────────┐   │  │
 │  │  │  C Kernels (src/benchmarks/*.c)                    │   │  │
-│  │  │  run_tree_search, run_json_processing, ...                │  │  │
+│  │  │  run_json_processing, run_text_processing, ...              │  │  │
 │  │  └────────────────────────────────────────────────────┘   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
@@ -309,6 +356,54 @@ passes as a string.
 ## Contributing
 
 Contributions are welcome! Please open an issue to discuss your ideas before submitting a PR.
+
+---
+
+## Sandboxed execution (`sandbox/`)
+
+`-s/--sandbox` runs the suite inside a disposable environment instead of on the
+host, so results can be compared across isolation layers. Two backends ship:
+**firecracker** (microVM) and **docker** (container).
+
+```bash
+make sbx                                       # build the sandbox CLI (./sbx)
+./agentbench --mode=simulation -s -t 4 -i 1    # default backend: firecracker
+./agentbench --mode=simulation -s -B docker    # container backend
+```
+
+One sandbox is created, the benchmark is dispatched into it, and it is removed
+afterwards; the exit code is the suite's. `-n N` runs N sandboxes in parallel
+and reports each one's lifecycle timing (startup / boot / userspace / ready /
+exec / remove) next to the benchmark results.
+
+These options configure the sandbox itself. They are host-side only — they are
+stripped before the command is passed into the guest:
+
+| Option | Default | Description |
+|---|---|---|
+| `-s`, `--sandbox` | off | Run the suite in a sandbox (`SBX_*` env vars set the defaults below) |
+| `-B`, `--sandbox-backend=BACKEND` | `firecracker` | Backend to run in (`SBX_BACKEND`); this build ships `firecracker` and `docker` |
+| `-n`, `--sandboxes=N` | `1` | Sandboxes to run in parallel. Two-phase: all are created first, and only when every one is ready is the benchmark dispatched to all at once |
+| `--mems=N` | `4096` | Sandbox memory in MiB (`SBX_MEMORY_MB`); values below `128` fall back to the default |
+| `--cpus=N` | follows `-t`, then `2` | Sandbox vCPU count (`SBX_CPUS`). An explicit override — it does not change the guest's thread count |
+| `--cpuset-cpus=LIST` | — | Pin the sandbox to an exact host CPU set, e.g. `0-127` (`SBX_CPUSET_CPUS`) |
+| `--cpuset-mems=LIST` | — | Pin the sandbox to NUMA memory nodes, e.g. `0` (`SBX_CPUSET_MEMS`) |
+| `--kernel=K` | per-arch | Kernel for the microVM backends: `~/.sbx/kernels/<microvm>/<K>` (`SBX_KERNEL`) |
+
+`-t/--threads` is both the guest's thread count and the source of the default
+sandbox vCPU count, so `-s -t 4` gives a 4-vCPU sandbox running 4 threads;
+`--cpus` overrides the sandbox size only. `--cpuset-cpus`/`--cpuset-mems` request
+**dedicated** cores/nodes rather than the default overcommit, and compose with
+`--cpus` (`--cpuset-cpus=0-127 --cpus 2` = "any of cores 0-127, 2 vCPUs"). All
+of these accept the dot and underscore spellings too (`--cpuset.cpus`).
+
+Every sandbox's `exec` runs under a `120 + 60*iterations` second budget, and
+`sbx` defaults to `./sbx` (both overridable with `SBX_EXEC_TIMEOUT` and `SBX`).
+
+Backends are plugins behind one Go interface; `gvisor` and `cloud-hypervisor`
+are planned. See [`sandbox/README.md`](sandbox/README.md) for the backend list,
+the full `sbx` command surface, the remaining `SBX_*` variables, the one-time
+host setup for Firecracker, and the `~/.sbx` state layout.
 
 ---
 

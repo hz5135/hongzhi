@@ -97,29 +97,75 @@ BENCH_OBJS := $(BENCH_SRCS:src/%.c=$(BUILD_DIR)/%.o)
 DEPS := $(FRAMEWORK_OBJS:.o=.d) $(BENCH_OBJS:.o=.d)
 -include $(DEPS)
 
-# --- Default goal: build the binary ---
+# --- Default goal: build everything ---
 # Stated explicitly: the -include of the .d files above happens before the first
 # target, and GNU make takes the default goal from the first rule it reads, which
-# would otherwise be build/main.o.
-.DEFAULT_GOAL := agentbench
+# would otherwise be build/main.o. `make agentbench` builds the benchmark binary
+# alone, with no Docker and no sandbox toolchain.
+.DEFAULT_GOAL := all
+all: envcheck agentbench sbx agent image rootfs
 
-# --- Environment check: static libstdc++ ---
-# Required because the link uses -static-libstdc++/-static-libgcc above. Bypass
-# the check with: make SKIP_ENV_CHECK=1
-.PHONY: envcheck-static
+# --- Environment checks ---
+# Verify a working Docker environment and a static libstdc++ (needed by
+# -static-libstdc++ linking) before any real compilation. The check itself lives
+# in scripts/check-env.sh, with distro-specific hints for mainstream
+# CentOS/RHEL/Debian/Ubuntu/... releases; it is the single place that rule is
+# written down. Bypass with: make SKIP_ENV_CHECK=1
+.PHONY: envcheck envcheck-static
+# Full check: docker + static libstdc++ (for the docker-dependent artifacts).
+envcheck:
+	@if [ -n "$(SKIP_ENV_CHECK)" ]; then \
+	  echo "envcheck: skipped (SKIP_ENV_CHECK set)"; \
+	else \
+	  ./scripts/check-env.sh; \
+	fi
+# Compile-only check: static libstdc++ only, no docker (used by the agentbench
+# and sbx-agent builds, including inside the Docker image build, where no docker
+# CLI exists).
 envcheck-static:
 	@if [ -n "$(SKIP_ENV_CHECK)" ]; then \
 	  echo "envcheck: skipped (SKIP_ENV_CHECK set)"; \
 	else \
-	  lib="$$($(CXX) -print-file-name=libstdc++.a)"; \
-	  if [ "$$lib" = "libstdc++.a" ] || [ ! -f "$$lib" ]; then \
-	    echo "ERROR: static libstdc++ (libstdc++.a) not found; the '-static-libstdc++' link will fail." >&2; \
-	    echo "       install it, e.g. 'dnf install -y libstdc++-static' (RHEL family) or the" >&2; \
-	    echo "       equivalent for your distribution." >&2; \
-	    exit 1; \
-	  fi; \
-	  echo "ok: static libstdc++ found at $$lib"; \
+	  CHECK_DOCKER=0 ./scripts/check-env.sh; \
 	fi
+
+# --- Build the sbx CLI (sandbox/), copied to the repo root ---
+sbx: envcheck FORCE
+	$(MAKE) -C sandbox sbx
+	cp -f sandbox/bin/sbx .
+
+# --- Build the sbx-agent (sandbox/), copied to the repo root ---
+agent: envcheck-static ./sbx-agent
+
+./sbx-agent: FORCE
+	$(MAKE) -C sandbox sbx-agent
+	cp -f sandbox/bin/sbx-agent .
+
+# --- Build the Docker image (self-contained, builds inside the container) ---
+# Uses a conservative portable ISA by default so the image runs in every
+# sandbox backend (Firecracker vCPUs may lack extensions the host has). Opt
+# into native host performance for Docker-only runs with MARCH=native.
+# The image ships the HOST-built benchmark binary, so the binary a sandbox
+# guest runs is the same file bare metal runs; hence the agentbench
+# prerequisite. Only the guest agent is compiled inside the container.
+image: envcheck agentbench
+	./scripts/build-image.sh
+
+# --- Build the guest rootfs template the microVM backends boot ---
+# rootfs.ext4 + the agent-injected injected.ext4 under
+# ~/.sbx/registry/rootfs/<image>/<tag>/: the image exported to ext4 with systemd
+# and the guest tools installed, cached and invalidated when the image id or the
+# agent binary changes (~40s of one-time work).
+#
+# It is its own step because it belongs to the build, never to a benchmark run:
+# `sbx create` copies the finished template and, when the image and the template
+# have drifted apart, stops with the command that fixes it instead of building
+# one mid-run. Run it after `make image` (and after rebuilding sbx-agent); see
+# `sbx rootfs status` for the cached state.
+rootfs: envcheck image sbx agent
+	./scripts/build-rootfs.sh
+
+FORCE:
 
 $(TOOLCHAIN_STAMP):
 	@mkdir -p $(dir $@)
@@ -190,11 +236,39 @@ test: agentbench
 	@echo "ALL SMOKE TESTS PASSED"
 
 # --- Clean ---
-# Removes the build outputs, and the two vendored libraries that are only valid
-# for the toolchain that produced them (a stale libcurl configured for a
-# different AR/CC pair is what curl-config-check exists to catch).
+# Removes every build output, including the derived artifacts that are only
+# valid for the binaries that produced them:
+#
+#   - the guest rootfs templates under sbx's home (rootfs.ext4 and
+#     injected.ext4, the latter with the guest agent binary of its build baked
+#     in),
+#   - the two images: agentbench:latest from scripts/build-image.sh, and the
+#     sbx-rootfs-<name>:<tag> that `sbx rootfs build` derives from it.
+#
+# Leaving either behind is how a rebuilt binary ends up running against a
+# template or an image built from the previous one - the guest agent is baked
+# into the template and the benchmarks are compiled into the image, so neither
+# can be paired with a different build. The cost is one `make image rootfs`
+# on the next build.
+#
+# sbx's home is resolved the way sbx itself resolves it (SBX_HOME, else
+# $HOME/.sbx - see sbx.HomeDir), so an SBX_HOME override is honoured here too.
+SBX_HOME     ?= $(if $(HOME),$(HOME)/.sbx,.sbx)
+IMAGE_TAG    ?= agentbench:latest
+ROOTFS_IMAGE ?= sbx-rootfs-agentbench:latest
+
 clean:
-	rm -rf $(BUILD_DIR) agentbench
+	rm -rf $(BUILD_DIR) agentbench sbx sbx-agent
+	rm -rf sandbox/build sandbox/bin
+	rm -rf $(SBX_HOME)/registry/rootfs
+	@if command -v docker >/dev/null 2>&1; then \
+	  for img in $(IMAGE_TAG) $(ROOTFS_IMAGE); do \
+	    if [ -n "$$(docker image ls -q "$$img" 2>/dev/null)" ]; then \
+	      docker image rm -f "$$img" >/dev/null 2>&1 || \
+	        echo "clean: docker would not remove $$img - the image is still there"; \
+	    fi; \
+	  done; \
+	fi
 	@if [ "$(LUAJIT)" != "system" ]; then $(MAKE) -C $(LUAJIT_DIR)/src clean; fi
 	-test -f $(CURL_DIR)/Makefile && $(MAKE) -C $(CURL_DIR)/lib distclean 2>/dev/null || true
 	rm -f $(CURL_LIB)
@@ -206,4 +280,4 @@ clean:
 	      $(CURL_DIR)/libtool $(CURL_DIR)/lib/curl_config.h
 	find $(CURL_DIR) -name Makefile -not -name 'Makefile.*' -delete
 
-.PHONY: agentbench test clean envcheck-static curl-config-check
+.PHONY: all agentbench sbx agent image rootfs test clean envcheck envcheck-static curl-config-check FORCE

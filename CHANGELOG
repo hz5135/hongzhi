@@ -6,3 +6,11 @@
   deserialization of tool schemas, conversations, and function-call round trips.
 - The second benchmark is `text_processing` — chunking with content hashing,
   regex-like extraction, and line-by-line log parsing.
+
+## 2026-10-13 — the sandbox layer
+
+- The suite runs inside a disposable sandbox with `-s/--sandbox`: a
+  **firecracker** microVM or a **docker** container.
+- The guest rootfs template is a build step (`make rootfs`), never part of a
+  benchmark run.
+- See `sandbox/README.md` for the backends and the host setup.
