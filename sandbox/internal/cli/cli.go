@@ -31,6 +31,8 @@ func Run(argv []string) int {
 		return cmdUpload(args)
 	case "download":
 		return cmdDownload(args)
+	case "create":
+		return cmdCreate(args)
 	case "stop":
 		return cmdStop(args)
 	case "remove":
@@ -145,6 +147,10 @@ func usage() {
 		"  exec      [sandbox] | --host H --port P --token T [--timeout MS] [-it] -- <cmd> [args...]\n" +
 		"  upload    [sandbox] -- <file>... [-d dest]\n" +
 		"  download  [sandbox] <remote> [-o local]\n")
+	fmt.Printf("  create    --backend %s --image IMG [--name N --kernel K --cpus N --memory MB --port P]\n"+
+		"            [--cpuset-cpus=LIST --cpuset-mems=LIST]  (explicit CPU/mem pinning)\n"+
+		"            [--<backend-arg>=V ...]  (unknown --key=value passed through to the backend)\n",
+		backendListText())
 	fmt.Printf("  stop      <sandbox>...\n" +
 		"  remove    <sandbox>...\n" +
 		"  list\n")

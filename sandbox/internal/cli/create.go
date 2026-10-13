@@ -1,12 +1,108 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"agentbench/sandbox/internal/sbx"
 	"agentbench/sandbox/internal/sbxhost"
 )
+
+// cmdCreate implements `sbx create --backend B --image IMG [opts...]`.
+func cmdCreate(args []string) int {
+	var opt sbx.Options
+	opt.Args = map[string]string{}
+	opt.CPUs = 2
+	opt.MemoryMB = 4096
+	i := 0
+	next := func() string {
+		if i+1 < len(args) {
+			i++
+			return args[i]
+		}
+		return ""
+	}
+	for ; i < len(args); i++ {
+		arg := args[i]
+		key, value := arg, ""
+		if eq := indexByte(arg, '='); eq >= 0 {
+			key, value = arg[:eq], arg[eq+1:]
+		}
+		take := func(v string) string {
+			if v != "" {
+				return v
+			}
+			return next()
+		}
+		switch key {
+		case "--backend":
+			opt.Backend = take(value)
+		case "--image":
+			opt.Image = take(value)
+		case "--name":
+			opt.Name = take(value)
+		case "--kernel":
+			opt.Kernel = take(value)
+		case "--cpus":
+			opt.CPUs = atoi(take(value))
+		case "--memory":
+			opt.MemoryMB = atoi(take(value))
+		case "--port":
+			opt.Port = atoi(take(value))
+		default:
+			if len(key) > 2 && key[0] == '-' && key[1] == '-' {
+				// Unknown --key: pass through to the backend.
+				opt.Args[key[2:]] = take(value)
+			}
+		}
+	}
+	if opt.Backend == "" {
+		fmt.Fprintf(os.Stderr, "error: --backend required %s\n", backendListText())
+		return 1
+	}
+	if opt.Image == "" {
+		fmt.Fprintf(os.Stderr, "error: --image required\n")
+		return 1
+	}
+	var info sbx.Info
+	if err := sbx.Create(opt, &info); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		/* A create whose environment is not prepared (no guest rootfs template
+		   for this image) fails the same way every time: retrying cannot help,
+		   the fix is in the message. Say so with a distinct exit code. */
+		if errors.Is(err, sbx.ErrRootfsNotPrepared) {
+			return sbx.ExitRootfsNotReady
+		}
+		return 1
+	}
+	fmt.Printf("created sandbox %s (%s, image=%s)\n", info.Name, info.Backend, info.Image)
+	if info.AgentHost != "" {
+		fmt.Printf("  agent: http://%s:%d token=%s\n", info.AgentHost, info.AgentPort, info.AgentToken)
+	}
+	fmt.Printf("  id: %s\n", info.ID)
+	// Machine-readable phase timing. `startup` is the whole bring-up up to the
+	// guest's own init - provision + host_setup + boot, in the order they
+	// happen - and is the number to compare with another sandbox's startup; the
+	// three parts are printed next to it, so it can be taken apart again
+	// (startup - provision - host_setup = boot). `userspace` is init -> the
+	// agent answering, and `ready` is the host wall time from the VM bring-up
+	// to a healthy agent (host_setup + boot + userspace), i.e. the sandbox's
+	// usable latency. Backends without a step report -1 (treated as n/a).
+	if info.Meta != nil {
+		p, hs := info.Meta["provision_sec"], info.Meta["host_setup_sec"]
+		s, b := info.Meta["startup_sec"], info.Meta["boot_sec"]
+		u, r := info.Meta["userspace_sec"], info.Meta["ready_sec"]
+		if p != "" || hs != "" || s != "" || b != "" || u != "" || r != "" {
+			fmt.Printf("  timing: startup=%s provision=%s host_setup=%s boot=%s userspace=%s ready=%s\n",
+				metaOrNA(s), metaOrNA(p), metaOrNA(hs), metaOrNA(b), metaOrNA(u), metaOrNA(r))
+			if source := info.Meta["startup_source"]; source != "" {
+				fmt.Println("  startup source:", source)
+			}
+		}
+	}
+	return 0
+}
 
 // metaOrNA renders an absent timing field as -1, which is how the create
 // timing line and the harness both mean "not measured".
@@ -95,4 +191,13 @@ func microVMsIn(backends []string) bool {
 		}
 	}
 	return false
+}
+
+func indexByte(s string, b byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == b {
+			return i
+		}
+	}
+	return -1
 }
