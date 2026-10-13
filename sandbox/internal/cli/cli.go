@@ -28,6 +28,10 @@ func Run(argv []string) int {
 		return cmdRemove(args)
 	case "list":
 		return cmdList()
+	case "doctor":
+		return cmdDoctor(args)
+	case "rootfs":
+		return cmdRootfs(args)
 	case "help", "-h", "--help":
 		usage()
 		return 0
@@ -56,6 +60,11 @@ func usage() {
 		"  stop      <sandbox>...\n" +
 		"  remove    <sandbox>...\n" +
 		"  list\n")
+	fmt.Printf("  doctor    [--backend %s]   verify backend environment\n",
+		backendListText())
+	fmt.Printf("  rootfs    build|status [--image IMG] [--force]\n" +
+		"            the bootable guest rootfs the microVM backends use; built by\n" +
+		"            `make rootfs`, never by a create (status: current template + fix)\n")
 	fmt.Printf("\n" +
 		"A sandbox may be referenced by its id/name (state under ~/.sbx/vms/)\n" +
 		"or by explicit --host/--port/--token for agent connection.\n")
